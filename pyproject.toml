@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "funding-rate-tools"
+version = "0.1.0"
+description = "Fetches funding rates, stores them, calculates p.a. rates, and generates a dashboard."
+authors = ["Juraj Bednar <juraj@bednar.io>"]
+license = "Unlicense"
+readme = "README.md"
+packages = [{include = "funding_rate_tools", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+requests = "^2.31.0" # Using a recent version of requests
+
+[tool.poetry.scripts]
+funding-cli = "funding_rate_tools.cli_tool:main"
+funding-dashboard = "funding_rate_tools.dashboard_generator:main"
+fill-data          = "funding_rate_tools.fill_data:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
