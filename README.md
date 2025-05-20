@@ -2,6 +2,14 @@
 
 This project provides tools to fetch, store, and analyze perpetual swap funding rates (currently from Binance and Hyperliquid). It includes a command-line utility to calculate and display per annum (p.a.) funding rates and a dashboard generator to visualize historical funding rates and current prices.
 
+## Use case
+
+This tool's aim is to understand the history of funding rates with a specific goal of seeing how much will you pay for a hedged position (owning the underlying + shorting it, usually against USD).
+
+If you have a token that generates yield, it will also calculate the final historical yield by calculating the cost of holding the hedge too.
+
+*Based explanation*: If you need to hold a **shitcoin** for something, but don't want to risk being rugpulled, short it to stay in USD. But before doing that, see if you won't pay too much in the funding of the short.
+
 ## Screenshot
 
 ![Dashboard Screenshot](doc/dashboard-screenshot.png)
