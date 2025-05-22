@@ -61,7 +61,7 @@ def main():
         v_print("Refreshing data...")
         for symbol in symbols:
             # ensure funding-interval is stored
-            if get_funding_interval_hours(symbol) is None:
+            if get_funding_interval_hours(symbol, exchange.value) is None:
                 source = exchange.value
                 if exchange == Exchange.HYPERLIQUID:
                     store_funding_info(symbol, 8, source)
@@ -75,7 +75,7 @@ def main():
                         store_funding_info(symbol, hrs, source)
 
             v_print(f"Fetching data for {symbol}...")
-            last_time_ms = database.get_last_funding_time(symbol)
+            last_time_ms = database.get_last_funding_time(symbol, exchange.value)
             fetch_start_time = last_time_ms + 1 if last_time_ms else None
 
             try:
@@ -112,14 +112,14 @@ def main():
     end_time_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
 
     for symbol in symbols:
-        rates_data = database.get_funding_rates(symbol, start_time_ms, end_time_ms)
+        rates_data = database.get_funding_rates(symbol, start_time_ms, end_time_ms, exchange.value)
         if not rates_data:
             results_numeric[symbol] = None
             results_display[symbol] = "N/A (Insufficient data for period)"
             continue
 
         # pass symbol into pa calculation
-        pa_rate = calculations.calculate_pa_rate(symbol, rates_data)
+        pa_rate = calculations.calculate_pa_rate(symbol, rates_data, exchange.value)
         if pa_rate is not None:
             results_numeric[symbol] = round(pa_rate, 2)
             results_display[symbol] = f"{pa_rate:.2f}% p.a." # Added space

@@ -43,7 +43,7 @@ def main():
     if not args.no_refresh:
         print("Refreshing data for dashboard...")
         for symbol in symbols:
-            if get_funding_interval_hours(symbol) is None:
+            if get_funding_interval_hours(symbol, exchange.value) is None:
                 source = exchange.value
                 if exchange == Exchange.HYPERLIQUID:
                     store_funding_info(symbol, 8, source)
@@ -57,7 +57,7 @@ def main():
                         store_funding_info(symbol, hrs, source)
 
             print(f"Fetching data for {symbol}...")
-            last_time_ms = database.get_last_funding_time(symbol)
+            last_time_ms = database.get_last_funding_time(symbol, exchange.value)
             fetch_start_time = last_time_ms + 1 if last_time_ms else None
 
             try:
@@ -81,21 +81,21 @@ def main():
     now_ms = int(time.time() * 1000)
 
     for symbol in symbols:
-        interval = get_funding_interval_hours(symbol) or (8 if exchange != Exchange.BINANCE else None)
+        interval = get_funding_interval_hours(symbol, exchange.value) or (8 if exchange != Exchange.BINANCE else None)
         current_price_str = "N/A" if exchange != Exchange.BINANCE else (
             f"{(val:=binance_api.fetch_current_price(symbol)):.2f}" if (val:=binance_api.fetch_current_price(symbol)) is not None else "N/A"
         )
 
         # Data for 7-day P.A. rate summary
-        rates_7d = calculations.get_rates_for_period(symbol, period_days=7)
+        rates_7d = calculations.get_rates_for_period(symbol, period_days=7, source=exchange.value)
         pa_rate_7d = calculations.calculate_pa_rate(symbol, rates_7d)
 
         # Data for 14-day P.A. rate summary
-        rates_14d = calculations.get_rates_for_period(symbol, period_days=14)
+        rates_14d = calculations.get_rates_for_period(symbol, period_days=14, source=exchange.value)
         pa_rate_14d = calculations.calculate_pa_rate(symbol, rates_14d)
 
         # Fetch ALL historical rates for the chart
-        all_rates_db = database.get_funding_rates(symbol, start_time_ms=0, end_time_ms=now_ms)
+        all_rates_db = database.get_funding_rates(symbol, start_time_ms=0, end_time_ms=now_ms, source=exchange.value)
 
         # Prepare all rates for JavaScript (timestamps and rates)
         # Ensure rates are sorted by time, which get_funding_rates should already do.

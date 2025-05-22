@@ -32,16 +32,21 @@ def setup_database():
     conn.commit()
     conn.close()
 
-def get_last_funding_time(symbol: str) -> int | None:
+def get_last_funding_time(symbol: str, source: str = None) -> int | None:
     """
     Retrieves the timestamp of the most recent funding rate stored for a given symbol.
     Returns None if no data exists for the symbol.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT MAX(funding_time) AS last_time FROM funding_rates WHERE symbol = ?
-    ''', (symbol,))
+    if source:
+        cursor.execute('''
+            SELECT MAX(funding_time) AS last_time FROM funding_rates WHERE symbol = ? AND source = ?
+        ''', (symbol, source))
+    else:
+        cursor.execute('''
+            SELECT MAX(funding_time) AS last_time FROM funding_rates WHERE symbol = ?
+        ''', (symbol,))
     row = cursor.fetchone()
     conn.close()
     if row and row['last_time'] is not None:
@@ -65,7 +70,7 @@ def store_funding_rates(symbol: str, rates_data: list[dict], source: str):
     conn.commit()
     conn.close()
 
-def get_funding_rates(symbol: str, start_time_ms: int, end_time_ms: int = None) -> list[dict]:
+def get_funding_rates(symbol: str, start_time_ms: int, end_time_ms: int = None, source: str = None) -> list[dict]:
     """
     Retrieves funding rates for a symbol within a given time range.
     Timestamps are in milliseconds.
@@ -75,20 +80,32 @@ def get_funding_rates(symbol: str, start_time_ms: int, end_time_ms: int = None) 
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT funding_time, funding_rate FROM funding_rates
-        WHERE symbol = ? AND funding_time >= ? AND funding_time <= ?
-        ORDER BY funding_time ASC
-    ''', (symbol, start_time_ms, end_time_ms))
+    if source:
+        cursor.execute('''
+            SELECT funding_time, funding_rate FROM funding_rates
+            WHERE symbol = ? AND funding_time >= ? AND funding_time <= ? AND source = ?
+            ORDER BY funding_time ASC
+        ''', (symbol, start_time_ms, end_time_ms, source))
+    else:
+        cursor.execute('''
+            SELECT funding_time, funding_rate FROM funding_rates
+            WHERE symbol = ? AND funding_time >= ? AND funding_time <= ?
+            ORDER BY funding_time ASC
+        ''', (symbol, start_time_ms, end_time_ms))
     rows = cursor.fetchall()
     conn.close()
     return [{"funding_time": r['funding_time'], "funding_rate": r['funding_rate']} for r in rows]
 
-def get_funding_interval_hours(symbol: str) -> int | None:
+def get_funding_interval_hours(symbol: str, source: str = None) -> int | None:
     conn = get_db_connection()
-    row = conn.execute(
-        'SELECT interval_hours FROM funding_info WHERE symbol = ?', (symbol,)
-    ).fetchone()
+    if source:
+        row = conn.execute(
+            'SELECT interval_hours FROM funding_info WHERE symbol = ? AND source = ?', (symbol, source)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            'SELECT interval_hours FROM funding_info WHERE symbol = ?', (symbol,)
+        ).fetchone()
     conn.close()
     return row['interval_hours'] if row else None
 
@@ -101,15 +118,21 @@ def store_funding_info(symbol: str, interval_hours: int, source: str):
     conn.commit()
     conn.close()
 
-def get_first_funding_time(symbol: str) -> int | None:
+def get_first_funding_time(symbol: str, source: str = None) -> int | None:
     """
     Retrieves the earliest funding_time stored for a symbol.
     """
     conn = get_db_connection()
-    row = conn.execute(
-        'SELECT MIN(funding_time) AS first_time FROM funding_rates WHERE symbol = ?',
-        (symbol,)
-    ).fetchone()
+    if source:
+        row = conn.execute(
+            'SELECT MIN(funding_time) AS first_time FROM funding_rates WHERE symbol = ? AND source = ?',
+            (symbol, source)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            'SELECT MIN(funding_time) AS first_time FROM funding_rates WHERE symbol = ?',
+            (symbol,)
+        ).fetchone()
     conn.close()
     return int(row['first_time']) if row and row['first_time'] is not None else None
 

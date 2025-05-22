@@ -8,7 +8,7 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
     source = exchange.value
 
     # last_known_time is the latest timestamp known before this script run for this symbol
-    last_known_time = get_last_funding_time(symbol)
+    last_known_time = get_last_funding_time(symbol, source)
     print(f"Forward filling {symbol} from {'after ' + str(last_known_time) if last_known_time else 'latest available'}")
 
     if exchange == Exchange.HYPERLIQUID:
@@ -48,7 +48,7 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
         time.sleep(delay)
 
     # After forward-fill, determine if and from where to backfill
-    first_overall_time_in_db = get_first_funding_time(symbol) # Earliest time in DB *after* potential forward-fill
+    first_overall_time_in_db = get_first_funding_time(symbol, source) # Earliest time in DB *after* potential forward-fill
 
     boundary_for_backfill = 0
     should_attempt_backfill = False
@@ -74,7 +74,7 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
         # should_attempt_backfill remains False
 
     if should_attempt_backfill:
-        interval = get_funding_interval_hours(symbol)
+        interval = get_funding_interval_hours(symbol, source)
         if interval is None:
             # This should ideally be populated by main(), but as a robust fallback:
             default_interval = 8 # Used for both if not found
@@ -152,11 +152,11 @@ def main():
     args = parser.parse_args()
     exchange = Exchange(args.exchange)
 
-    syms_to_process = [s.upper() for s in (args.symbols or database.DEFAULT_SYMBOLS)]
+    syms_to_process = [s.upper() for s in (args.symbols or config.DEFAULT_SYMBOLS)]
 
     print("Ensuring funding interval information is available...")
     for symbol_info in syms_to_process:
-        if database.get_funding_interval_hours(symbol_info) is None:
+        if database.get_funding_interval_hours(symbol_info, exchange.value) is None:
             source_for_info = exchange.value
             interval_to_store = None
             if exchange == Exchange.HYPERLIQUID:

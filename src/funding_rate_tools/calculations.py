@@ -5,7 +5,7 @@ from .database import get_funding_interval_hours
 
 DAYS_IN_YEAR = 365
 
-def calculate_pa_rate(symbol: str, rates_data: list[dict]) -> float | None:
+def calculate_pa_rate(symbol: str, rates_data: list[dict], source: str = None) -> float | None:
     """
     Calculates the per annum (p.a.) funding rate from a list of funding rate data.
     The rate is from the perspective of a short position (positive if shorts are paid).
@@ -13,7 +13,7 @@ def calculate_pa_rate(symbol: str, rates_data: list[dict]) -> float | None:
     if not rates_data:
         return None
 
-    interval = get_funding_interval_hours(symbol)
+    interval = get_funding_interval_hours(symbol, source)
     if not interval:
         return None
 
@@ -24,7 +24,7 @@ def calculate_pa_rate(symbol: str, rates_data: list[dict]) -> float | None:
     pa = avg_per_interval * intervals_per_day * DAYS_IN_YEAR
     return pa * 100
 
-def get_rates_for_period(symbol: str, period_days: int | None = None, since_date_str: str | None = None) -> list[dict]:
+def get_rates_for_period(symbol: str, period_days: int | None = None, since_date_str: str | None = None, source: str = None) -> list[dict]:
     """
     Retrieves funding rates for a specified period (number of days or since a date).
     """
@@ -44,7 +44,7 @@ def get_rates_for_period(symbol: str, period_days: int | None = None, since_date
     else:
         start_time_ms = now_ms - (14 * 24 * 60 * 60 * 1000)
 
-    return get_funding_rates(symbol, start_time_ms, now_ms)
+    return get_funding_rates(symbol, start_time_ms, now_ms, source)
 
 def get_start_time_for_cli_period(args) -> int | None:
     """Determines the start timestamp in milliseconds based on CLI arguments."""
