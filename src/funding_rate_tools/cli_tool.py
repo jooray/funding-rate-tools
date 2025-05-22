@@ -4,11 +4,8 @@ import time
 from datetime import datetime, timezone
 import json
 
-from . import config, database, binance_api, calculations
+from . import config, database, binance_api, calculations, hyperliquid_api, bybit_api
 from .database import get_funding_interval_hours, store_funding_info, store_funding_rates
-from .binance_api import fetch_funding_info
-from .hyperliquid_api import fetch_funding_rate_history_hyperliquid
-from .bybit_api import fetch_funding_rate_history_bybit, fetch_funding_info_bybit
 from .config import Exchange
 
 def main():
@@ -69,11 +66,11 @@ def main():
                 if exchange == Exchange.HYPERLIQUID:
                     store_funding_info(symbol, 8, source)
                 elif exchange == Exchange.BYBIT:
-                    hrs = fetch_funding_info_bybit(symbol)
+                    hrs = bybit_api.fetch_funding_info(symbol)
                     if hrs:
                         store_funding_info(symbol, hrs, source)
                 else:  # BINANCE
-                    hrs = fetch_funding_info(symbol)
+                    hrs = binance_api.fetch_funding_info(symbol)
                     if hrs:
                         store_funding_info(symbol, hrs, source)
 
@@ -84,9 +81,9 @@ def main():
             try:
                 source = exchange.value
                 if exchange == Exchange.HYPERLIQUID:
-                    new_rates = fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=fetch_start_time)
+                    new_rates = hyperliquid_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_start_time)
                 elif exchange == Exchange.BYBIT:
-                    new_rates = fetch_funding_rate_history_bybit(symbol, start_time_ms=fetch_start_time)
+                    new_rates = bybit_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_start_time)
                 else:  # BINANCE
                     new_rates = binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_start_time)
 

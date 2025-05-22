@@ -3,7 +3,7 @@ import time
 
 BYBIT_URL = "https://api.bybit.com"
 
-def fetch_funding_rate_history_bybit(symbol: str, start_time_ms: int | None = None) -> list[dict]:
+def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None) -> list[dict]:
     """
     Fetches historical funding rates for a symbol from Bybit.
     Returns list of {'fundingTime': ..., 'fundingRate': ...}.
@@ -89,7 +89,7 @@ def fetch_funding_rate_history_bybit(symbol: str, start_time_ms: int | None = No
 
     return all_rates
 
-def fetch_funding_info_bybit(symbol: str) -> int | None:
+def fetch_funding_info(symbol: str) -> int | None:
     """Fetches funding interval hours for a Bybit symbol."""
     params = {
         "category": "linear",

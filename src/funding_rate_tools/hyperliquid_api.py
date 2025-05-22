@@ -3,7 +3,7 @@ import time
 
 HYPERLIQUID_URL = "https://api.hyperliquid.xyz/info"
 
-def fetch_funding_rate_history_hyperliquid(symbol: str, start_time_ms: int | None = None) -> list[dict]:
+def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None) -> list[dict]:
     """
     Fetches historical funding rates for a symbol from Hyperliquid.
     Returns list of {'fundingTime': ..., 'fundingRate': ...}.

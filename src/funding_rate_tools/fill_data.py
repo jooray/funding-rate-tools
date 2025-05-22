@@ -1,10 +1,7 @@
 import argparse
 import time
-from . import binance_api, database
+from . import binance_api, database, hyperliquid_api, bybit_api
 from .database import get_last_funding_time, get_first_funding_time, store_funding_rates, get_funding_interval_hours, store_funding_info
-from .hyperliquid_api import fetch_funding_rate_history_hyperliquid
-from .bybit_api import fetch_funding_rate_history_bybit, fetch_funding_info_bybit
-from .binance_api import fetch_funding_info
 from .config import Exchange
 
 def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
@@ -22,9 +19,9 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
     first_forward_pass = True
     while True:
         if exchange == Exchange.HYPERLIQUID:
-            rates = fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=start_for_forward_fill)
+            rates = hyperliquid_api.fetch_funding_rate_history(symbol, start_time_ms=start_for_forward_fill)
         elif exchange == Exchange.BYBIT:
-            rates = fetch_funding_rate_history_bybit(symbol, start_time_ms=start_for_forward_fill)
+            rates = bybit_api.fetch_funding_rate_history(symbol, start_time_ms=start_for_forward_fill)
         else:  # BINANCE
             rates = binance_api.fetch_funding_rate_history(symbol, start_time_ms=start_for_forward_fill)
 
@@ -105,9 +102,9 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
                     break
 
             if exchange == Exchange.HYPERLIQUID:
-                rates_chunk = fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=fetch_chunk_start_time)
+                rates_chunk = hyperliquid_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
             elif exchange == Exchange.BYBIT:
-                rates_chunk = fetch_funding_rate_history_bybit(symbol, start_time_ms=fetch_chunk_start_time)
+                rates_chunk = bybit_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
             else:  # BINANCE
                 rates_chunk = binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
 
@@ -167,7 +164,7 @@ def main():
                 print(f"  Storing default funding interval for Hyperliquid symbol {symbol_info}: {interval_to_store} hours.")
             elif exchange == Exchange.BYBIT:
                 print(f"  Fetching funding interval for Bybit symbol {symbol_info}...")
-                fetched_interval = fetch_funding_info_bybit(symbol_info)
+                fetched_interval = bybit_api.fetch_funding_info(symbol_info)
                 if fetched_interval:
                     interval_to_store = fetched_interval
                     print(f"  Stored funding interval for {symbol_info}: {interval_to_store} hours.")
@@ -175,7 +172,7 @@ def main():
                     print(f"  Could not fetch funding interval for Bybit symbol {symbol_info}. Backfill will use a default if needed.")
             else: # Binance
                 print(f"  Fetching funding interval for Binance symbol {symbol_info}...")
-                fetched_interval = fetch_funding_info(symbol_info)
+                fetched_interval = binance_api.fetch_funding_info(symbol_info)
                 if fetched_interval:
                     interval_to_store = fetched_interval
                     print(f"  Stored funding interval for {symbol_info}: {interval_to_store} hours.")
