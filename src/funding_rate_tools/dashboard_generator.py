@@ -6,11 +6,14 @@ import os
 from . import config, database, binance_api, calculations
 from .html_template import get_html_content
 from .hyperliquid_api import fetch_funding_rate_history_hyperliquid
+from .bybit_api import fetch_funding_rate_history_bybit, fetch_funding_info_bybit
 from .database import get_funding_interval_hours, store_funding_info, store_funding_rates
+from .binance_api import fetch_funding_info
+from .config import Exchange
 
 def main():
     """Main function for the dashboard generator."""
-    parser = argparse.ArgumentParser(description="Generate Binance funding rate dashboard.")
+    parser = argparse.ArgumentParser(description="Generate funding rate dashboard.")
     parser.add_argument(
         "--symbols",
         nargs="+",
@@ -31,23 +34,27 @@ def main():
     )
     parser.add_argument(
         "--exchange",
-        choices=["binance", "hyperliquid"],
+        choices=["binance", "hyperliquid", "bybit"],
         default="binance",
         help="Exchange to fetch funding rates from. Default: binance"
     )
 
     args = parser.parse_args()
-    use_hl = args.exchange == "hyperliquid"
+    exchange = Exchange(args.exchange)
     symbols = [s.upper() for s in args.symbols]
 
     if not args.no_refresh:
         print("Refreshing data for dashboard...")
         for symbol in symbols:
             if get_funding_interval_hours(symbol) is None:
-                source = "hyperliquid" if use_hl else "binance"
-                if use_hl:
+                source = exchange.value
+                if exchange == Exchange.HYPERLIQUID:
                     store_funding_info(symbol, 8, source)
-                else:
+                elif exchange == Exchange.BYBIT:
+                    hrs = fetch_funding_info_bybit(symbol)
+                    if hrs:
+                        store_funding_info(symbol, hrs, source)
+                else:  # BINANCE
                     hrs = fetch_funding_info(symbol)
                     if hrs:
                         store_funding_info(symbol, hrs, source)
@@ -57,12 +64,13 @@ def main():
             fetch_start_time = last_time_ms + 1 if last_time_ms else None
 
             try:
-                source = "hyperliquid" if use_hl else "binance"
-                new_rates = (
-                    fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=fetch_start_time)
-                    if use_hl
-                    else binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_start_time)
-                )
+                source = exchange.value
+                if exchange == Exchange.HYPERLIQUID:
+                    new_rates = fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=fetch_start_time)
+                elif exchange == Exchange.BYBIT:
+                    new_rates = fetch_funding_rate_history_bybit(symbol, start_time_ms=fetch_start_time)
+                else:  # BINANCE
+                    new_rates = binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_start_time)
                 if new_rates:
                     store_funding_rates(symbol, new_rates, source)
                     print(f"Stored {len(new_rates)} new rate(s) for {symbol}.")
@@ -76,8 +84,8 @@ def main():
     now_ms = int(time.time() * 1000)
 
     for symbol in symbols:
-        interval = get_funding_interval_hours(symbol) or (8 if use_hl else None)
-        current_price_str = "N/A" if use_hl else (
+        interval = get_funding_interval_hours(symbol) or (8 if exchange != Exchange.BINANCE else None)
+        current_price_str = "N/A" if exchange != Exchange.BINANCE else (
             f"{(val:=binance_api.fetch_current_price(symbol)):.2f}" if (val:=binance_api.fetch_current_price(symbol)) is not None else "N/A"
         )
 

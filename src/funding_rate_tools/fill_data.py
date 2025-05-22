@@ -3,27 +3,31 @@ import time
 from . import binance_api, database
 from .database import get_last_funding_time, get_first_funding_time, store_funding_rates, get_funding_interval_hours, store_funding_info
 from .hyperliquid_api import fetch_funding_rate_history_hyperliquid
-from .binance_api import fetch_funding_info # Added for main
+from .bybit_api import fetch_funding_rate_history_bybit, fetch_funding_info_bybit
+from .binance_api import fetch_funding_info
+from .config import Exchange
 
-def backfill_symbol(symbol: str, delay: int, use_hl: bool):
-    source = "hyperliquid" if use_hl else "binance"
+def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
+    source = exchange.value
 
     # last_known_time is the latest timestamp known before this script run for this symbol
     last_known_time = get_last_funding_time(symbol)
     print(f"Forward filling {symbol} from {'after ' + str(last_known_time) if last_known_time else 'latest available'}")
 
-    if use_hl:
+    if exchange == Exchange.HYPERLIQUID:
         start_for_forward_fill = last_known_time + 1 if last_known_time is not None else None
     else:
         start_for_forward_fill = last_known_time
 
     first_forward_pass = True
     while True:
-        rates = (
-            fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=start_for_forward_fill)
-            if use_hl
-            else binance_api.fetch_funding_rate_history(symbol, start_time_ms=start_for_forward_fill)
-        )
+        if exchange == Exchange.HYPERLIQUID:
+            rates = fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=start_for_forward_fill)
+        elif exchange == Exchange.BYBIT:
+            rates = fetch_funding_rate_history_bybit(symbol, start_time_ms=start_for_forward_fill)
+        else:  # BINANCE
+            rates = binance_api.fetch_funding_rate_history(symbol, start_time_ms=start_for_forward_fill)
+
         if not rates:
             if first_forward_pass:
                  log_msg_ff = f"  No new rates found for {symbol}"
@@ -40,7 +44,7 @@ def backfill_symbol(symbol: str, delay: int, use_hl: bool):
         newest_time_in_batch = rates[-1]['fundingTime']
         print(f"  Fetched {len(rates)} new rates for {symbol}, up to {newest_time_in_batch}. Next start for forward-fill: {newest_time_in_batch + 1}")
 
-        if use_hl:
+        if exchange == Exchange.HYPERLIQUID:
             start_for_forward_fill = newest_time_in_batch + 1
         else:
             start_for_forward_fill = newest_time_in_batch
@@ -80,7 +84,12 @@ def backfill_symbol(symbol: str, delay: int, use_hl: bool):
             print(f"Warning: Funding interval for {symbol} not found in DB. Using default {default_interval}h for backfill step calculation.")
             interval = default_interval
 
-        chunk = 450 if use_hl else 900
+        if exchange == Exchange.HYPERLIQUID:
+            chunk = 450
+        elif exchange == Exchange.BYBIT:
+            chunk = 175
+        else:  # BINANCE
+            chunk = 900
         ms_step = interval * 3600 * 1000 * chunk
 
         current_boundary_for_loop = boundary_for_backfill
@@ -95,11 +104,12 @@ def backfill_symbol(symbol: str, delay: int, use_hl: bool):
                     print(f"  Backfill for {symbol}: fetch start {fetch_chunk_start_time} is not before current boundary {current_boundary_for_loop}. Stopping.")
                     break
 
-            rates_chunk = (
-                fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=fetch_chunk_start_time)
-                if use_hl
-                else binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
-            )
+            if exchange == Exchange.HYPERLIQUID:
+                rates_chunk = fetch_funding_rate_history_hyperliquid(symbol, start_time_ms=fetch_chunk_start_time)
+            elif exchange == Exchange.BYBIT:
+                rates_chunk = fetch_funding_rate_history_bybit(symbol, start_time_ms=fetch_chunk_start_time)
+            else:  # BINANCE
+                rates_chunk = binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
 
             older_rates_in_chunk = [
                 r for r in rates_chunk
@@ -138,23 +148,31 @@ def main():
     )
     parser.add_argument(
         "--exchange",
-        choices=["binance", "hyperliquid"],
+        choices=["binance", "hyperliquid", "bybit"],
         default="binance",
         help="Exchange to fill data for. Default: binance"
     )
     args = parser.parse_args()
-    use_hl = args.exchange == "hyperliquid"
+    exchange = Exchange(args.exchange)
 
     syms_to_process = [s.upper() for s in (args.symbols or database.DEFAULT_SYMBOLS)]
 
     print("Ensuring funding interval information is available...")
     for symbol_info in syms_to_process:
         if database.get_funding_interval_hours(symbol_info) is None:
-            source_for_info = "hyperliquid" if use_hl else "binance"
+            source_for_info = exchange.value
             interval_to_store = None
-            if use_hl:
+            if exchange == Exchange.HYPERLIQUID:
                 interval_to_store = 8
                 print(f"  Storing default funding interval for Hyperliquid symbol {symbol_info}: {interval_to_store} hours.")
+            elif exchange == Exchange.BYBIT:
+                print(f"  Fetching funding interval for Bybit symbol {symbol_info}...")
+                fetched_interval = fetch_funding_info_bybit(symbol_info)
+                if fetched_interval:
+                    interval_to_store = fetched_interval
+                    print(f"  Stored funding interval for {symbol_info}: {interval_to_store} hours.")
+                else:
+                    print(f"  Could not fetch funding interval for Bybit symbol {symbol_info}. Backfill will use a default if needed.")
             else: # Binance
                 print(f"  Fetching funding interval for Binance symbol {symbol_info}...")
                 fetched_interval = fetch_funding_info(symbol_info)
@@ -169,7 +187,7 @@ def main():
             time.sleep(0.2) # Small delay if fetching info for multiple symbols
 
     for s in syms_to_process:
-        backfill_symbol(s, args.delay, use_hl)
+        backfill_symbol(s, args.delay, exchange)
 
 if __name__ == "__main__":
     main()

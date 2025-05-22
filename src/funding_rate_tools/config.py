@@ -1,4 +1,10 @@
 import os
+from enum import Enum
+
+class Exchange(Enum):
+    BINANCE = "binance"
+    HYPERLIQUID = "hyperliquid"
+    BYBIT = "bybit"
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
