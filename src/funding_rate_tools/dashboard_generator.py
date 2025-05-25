@@ -7,6 +7,7 @@ from . import config, database, binance_api, calculations, hyperliquid_api, bybi
 from .html_template import get_html_content
 from .database import get_funding_interval_hours, store_funding_info, store_funding_rates
 from .config import Exchange
+from .utils import should_refresh_symbol
 
 def main():
     """Main function for the dashboard generator."""
@@ -18,11 +19,24 @@ def main():
         help=f"Space-separated list of symbols (e.g., BTCUSDT ETHUSDT). Default: {' '.join(config.DEFAULT_SYMBOLS)}",
         metavar="SYMBOL"
     )
-    parser.add_argument(
+
+    refresh_group = parser.add_mutually_exclusive_group()
+    refresh_group.add_argument(
+        "--always-refresh",
+        action="store_true",
+        help="Always refresh data from API regardless of when last update occurred."
+    )
+    refresh_group.add_argument(
         "--no-refresh",
         action="store_true",
-        help="Do not refresh data from Binance API; use existing data in database."
+        help="Do not refresh data from API; use existing data in database."
     )
+    refresh_group.add_argument(
+        "--smart-refresh",
+        action="store_true",
+        help="Only refresh data if enough time has passed since last funding rate (default)."
+    )
+
     parser.add_argument(
         "--output",
         type=str,
@@ -40,9 +54,25 @@ def main():
     exchange = Exchange(args.exchange)
     symbols = [s.upper() for s in args.symbols]
 
-    if not args.no_refresh:
-        print("Refreshing data for dashboard...")
+    # Determine refresh behavior - smart refresh is default
+    if args.no_refresh:
+        refresh_mode = "never"
+    elif args.always_refresh:
+        refresh_mode = "always"
+    else:  # default or explicit --smart-refresh
+        refresh_mode = "smart"
+
+    if refresh_mode != "never":
+        print(f"Refreshing data for dashboard (mode: {refresh_mode})...")
         for symbol in symbols:
+            # Determine if this symbol should be refreshed
+            should_refresh = (refresh_mode == "always" or
+                            (refresh_mode == "smart" and should_refresh_symbol(symbol, exchange.value)))
+
+            if refresh_mode == "smart" and not should_refresh:
+                print(f"Skipping refresh for {symbol} - not enough time has passed since last funding rate")
+                continue
+
             if get_funding_interval_hours(symbol, exchange.value) is None:
                 source = exchange.value
                 if exchange == Exchange.HYPERLIQUID:

@@ -7,6 +7,7 @@ import json
 from . import config, database, binance_api, calculations, hyperliquid_api, bybit_api
 from .database import get_funding_interval_hours, store_funding_info, store_funding_rates
 from .config import Exchange
+from .utils import should_refresh_symbol
 
 def main():
     """Main function for the CLI tool."""
@@ -18,11 +19,24 @@ def main():
         help=f"Space-separated list of symbols (e.g., BTCUSDT ETHUSDT). Default: {' '.join(config.DEFAULT_SYMBOLS)}",
         metavar="SYMBOL"
     )
-    parser.add_argument(
+
+    refresh_group = parser.add_mutually_exclusive_group()
+    refresh_group.add_argument(
+        "--always-refresh",
+        action="store_true",
+        help="Always refresh data from API regardless of when last update occurred."
+    )
+    refresh_group.add_argument(
         "--no-refresh",
         action="store_true",
-        help="Do not refresh data from Binance API; use existing data in database."
+        help="Do not refresh data from API; use existing data in database."
     )
+    refresh_group.add_argument(
+        "--smart-refresh",
+        action="store_true",
+        help="Only refresh data if enough time has passed since last funding rate (default)."
+    )
+
     parser.add_argument(
         "--verbose",
         action="store_true",
@@ -49,6 +63,14 @@ def main():
     args = parser.parse_args()
     exchange = Exchange(args.exchange)
 
+    # Determine refresh behavior - smart refresh is default
+    if args.no_refresh:
+        refresh_mode = "never"
+    elif args.always_refresh:
+        refresh_mode = "always"
+    else:  # default or explicit --smart-refresh
+        refresh_mode = "smart"
+
     # Helper for verbose printing
     def v_print(message):
         if args.verbose:
@@ -57,9 +79,17 @@ def main():
     symbols = [s.upper() for s in args.symbols]
     refresh_failed_for_any = False
 
-    if not args.no_refresh:
-        v_print("Refreshing data...")
+    if refresh_mode != "never":
+        v_print(f"Refresh mode: {refresh_mode}")
         for symbol in symbols:
+            # Determine if this symbol should be refreshed
+            should_refresh = (refresh_mode == "always" or
+                            (refresh_mode == "smart" and should_refresh_symbol(symbol, exchange.value)))
+
+            if refresh_mode == "smart" and not should_refresh:
+                v_print(f"Skipping refresh for {symbol} - not enough time has passed since last funding rate")
+                continue
+
             # ensure funding-interval is stored
             if get_funding_interval_hours(symbol, exchange.value) is None:
                 source = exchange.value

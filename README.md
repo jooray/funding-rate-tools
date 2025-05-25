@@ -20,7 +20,7 @@ If you have a token that generates yield, it will also calculate the final histo
 - Stores data in a local SQLite database to avoid redundant fetches.
 - Calculates p.a. funding rates from a short position perspective.
 - Command-line interface (CLI) for:
-    - Refreshing funding rate data.
+    - Refreshing funding rate data with smart refresh (only when new data might be available).
     - Calculating p.a. rates for various periods (last day, week, month, or since a specific date).
     - Handling multiple trading pairs.
 - Generates an interactive HTML dashboard:
@@ -53,7 +53,10 @@ poetry run funding-cli --help
 
 **Arguments:**
 - `--symbols`: Space-separated list of symbols (e.g., BTCUSDT ETHUSDT). Default: BTCUSDT ETHUSDT  
-- `--no-refresh`: Do not refresh data from API; use existing data in database.  
+- **Refresh options** (mutually exclusive):
+  - `--smart-refresh`: Only refresh data if enough time has passed since last funding rate (default behavior).
+  - `--always-refresh`: Always refresh data from API regardless of when last update occurred.
+  - `--no-refresh`: Do not refresh data from API; use existing data in database.
 - `--verbose`: Print debug and info messages.  
 - `--json`: Output results as a JSON map from pair to numeric p.a. rate (no `% p.a.` suffix).  
 - `--exchange`: Choose exchange for funding rates (`binance`, `hyperliquid`, or `bybit`). Default: `binance`.  
@@ -65,7 +68,7 @@ poetry run funding-cli --help
 
 **Examples:**
 
-1.  **Fetch and calculate for a single pair (last week):**
+1.  **Fetch and calculate for a single pair (last week, smart refresh):**
     ```bash
     poetry run funding-cli --symbols BTCUSDT --last-week
     ```
@@ -74,7 +77,17 @@ poetry run funding-cli --help
     8.50
     ```
 
-2.  **Multiple pairs with no refresh (last month):**
+2.  **Multiple pairs with always refresh (last month):**
+    ```bash
+    poetry run funding-cli --symbols BTCUSDT ETHUSDT --last-month --always-refresh
+    ```
+    Output:
+    ```
+    BTCUSDT: 10.20% p.a.
+    ETHUSDT:  7.10% p.a.
+    ```
+
+3.  **No refresh mode (use only existing data):**
     ```bash
     poetry run funding-cli --symbols BTCUSDT ETHUSDT --last-month --no-refresh
     ```
@@ -84,7 +97,7 @@ poetry run funding-cli --help
     ETHUSDT:  7.10% p.a.
     ```
 
-3.  **JSON output (single pair):**
+4.  **JSON output (single pair):**
     ```bash
     poetry run funding-cli --symbols AVAUSDT --last-day --json
     ```
@@ -93,15 +106,18 @@ poetry run funding-cli --help
     {"AVAUSDT": 1.23}
     ```
 
-4.  **Using Bybit exchange:**
+5.  **Using Bybit exchange:**
     ```bash
     poetry run funding-cli --symbols VVVUSDT --last-week --exchange bybit
     ```
 
-5.  **Verbose mode with debug info:**
+6.  **Verbose mode with debug info:**
     ```bash
     poetry run funding-cli --symbols BTCUSDT --last-week --verbose
     ```
+
+**Smart Refresh Logic:**
+The default `--smart-refresh` mode checks if enough time has passed since the last funding rate update. It compares the current time against `last_funding_time + funding_interval_hours`. This prevents unnecessary API calls when no new funding data could be available yet.
 
 **Error Handling:**
 The CLI prints an error message and exits with a non-zero status code if data refresh fails or if rates cannot be calculated (e.g., insufficient data). JSON output will include `null` for any pair with no calculable rate.
@@ -140,9 +156,18 @@ Hover the "?" icons next to these controls and each Yield input for more detail.
 poetry run funding-dashboard --help
 ```
 
+**Arguments:**
+- `--symbols`: Space-separated list of symbols (e.g., BTCUSDT ETHUSDT). Default: BTCUSDT ETHUSDT
+- **Refresh options** (mutually exclusive):
+  - `--smart-refresh`: Only refresh data if enough time has passed since last funding rate (default behavior).
+  - `--always-refresh`: Always refresh data from API regardless of when last update occurred.
+  - `--no-refresh`: Do not refresh data from API; use existing data in database.
+- `--exchange`: Choose exchange for funding rates (`binance`, `hyperliquid`, or `bybit`). Default: `binance`.
+- `--output`: Output HTML file path. Default: dashboard.html in project root.
+
 **Examples:**
 
-1.  **Generate dashboard for BTCUSDT and ETHUSDT (refreshes data by default):**
+1.  **Generate dashboard for BTCUSDT and ETHUSDT (smart refresh by default):**
     ```bash
     poetry run funding-dashboard --symbols BTCUSDT ETHUSDT
     ```
@@ -152,7 +177,12 @@ poetry run funding-dashboard --help
     poetry run funding-dashboard --symbols AVAUSDT --no-refresh
     ```
 
-3.  **Generate dashboard for Bybit symbols:**
+3.  **Generate dashboard with always refresh:**
+    ```bash
+    poetry run funding-dashboard --symbols BTCUSDT ETHUSDT --always-refresh
+    ```
+
+4.  **Generate dashboard for Bybit symbols:**
     ```bash
     poetry run funding-dashboard --symbols VVVUSDT --exchange bybit
     ```

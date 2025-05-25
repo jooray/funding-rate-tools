@@ -1,6 +1,6 @@
 import argparse
 import time
-from . import binance_api, database, hyperliquid_api, bybit_api
+from . import binance_api, database, hyperliquid_api, bybit_api, config
 from .database import get_last_funding_time, get_first_funding_time, store_funding_rates, get_funding_interval_hours, store_funding_info
 from .config import Exchange
 
