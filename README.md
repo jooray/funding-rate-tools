@@ -189,6 +189,19 @@ poetry run funding-dashboard --help
 
 Open `dashboard.html` in your browser. Use the dropdowns at the top of the page to adjust the displayed period and the rolling P.A. calculation window. Each chart shows the funding rate (% Funding), the rolling P.A. rate (% p.a.), and optionally the cumulative hedged net P.A. (%) on dual axes.
 
+#### URL Parameters for Yield Prefilling
+
+You can prefill the yield P.A.% fields using URL parameters when opening the dashboard:
+
+```
+dashboard.html?yield_VVVUSDT=58.7&yield_AVAUSDT=20
+```
+
+- Use the format `yield_SYMBOLNAME=VALUE` where `SYMBOLNAME` is the trading pair symbol and `VALUE` is the yield percentage.
+- Multiple symbols can be specified by separating them with `&`.
+
+This feature is useful for bookmarking specific yield scenarios or sharing dashboard configurations with preset yield assumptions.
+
 ### Data Backfill Utility (`fill-data`)
 
 A helper CLI to fill any missing historical funding-rate data around gaps in your database:

@@ -32,6 +32,9 @@ def get_html_content(pairs_data: list[dict]) -> str:
         for i, p in enumerate(pairs_data)
     ])
 
+    # Create symbol to index mapping for JavaScript
+    symbol_to_index = {p['symbol']: i for i, p in enumerate(pairs_data)}
+
     return """
     <!DOCTYPE html>
     <html lang="en">
@@ -148,7 +151,7 @@ def get_html_content(pairs_data: list[dict]) -> str:
                     <span class="tooltip">?
                         <span class="tooltiptext">
                             Cumulative net return (funding + yield) annualized to date.<br>
-                            At time t, it’s the average net rate so far, annualized; area under curve ≈ total hedged yield.
+                            At time t, it's the average net rate so far, annualized; area under curve ≈ total hedged yield.
                         </span>
                     </span>
                 </label>
@@ -174,6 +177,7 @@ def get_html_content(pairs_data: list[dict]) -> str:
         <script>
             const fundingData = """ + data_json + """;
             const fundingIntervals = """ + dumps({p['symbol']: p['interval_hours'] for p in pairs_data}) + """;
+            const symbolToIndex = """ + dumps(symbol_to_index) + """;
             const periodSelect = document.getElementById('periodSelect');
             const paWindowSelect = document.getElementById('paWindowSelect');
             const showFundingRateCheckbox = document.getElementById('showFundingRate');
@@ -371,12 +375,44 @@ def get_html_content(pairs_data: list[dict]) -> str:
                 });
             }
 
+            // Parse URL parameters and prefill yield inputs
+            function parseUrlParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const yieldParams = {};
+
+                for (const [key, value] of urlParams.entries()) {
+                    if (key.startsWith('yield_')) {
+                        const symbol = key.substring(6); // Remove 'yield_' prefix
+                        yieldParams[symbol] = parseFloat(value);
+                    }
+                }
+
+                return yieldParams;
+            }
+
+            function prefillYieldInputs() {
+                const yieldParams = parseUrlParams();
+
+                for (const [symbol, yieldValue] of Object.entries(yieldParams)) {
+                    const index = symbolToIndex[symbol];
+                    if (index !== undefined && !isNaN(yieldValue)) {
+                        const input = document.getElementById(`yieldInput_${index}`);
+                        if (input) {
+                            input.value = yieldValue.toFixed(2);
+                        }
+                    }
+                }
+            }
+
             window.onload = () => {
                 Object.keys(fundingData).forEach((_, idx) => {
                     const inp = document.getElementById(`yieldInput_${idx}`);
                     yieldInputs[idx] = inp;
                     inp.addEventListener('input', createOrUpdateCharts);
                 });
+
+                // Prefill inputs before creating charts
+                prefillYieldInputs();
                 createOrUpdateCharts();
             };
 
