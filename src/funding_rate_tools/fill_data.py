@@ -76,13 +76,11 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
     if should_attempt_backfill:
         interval = get_funding_interval_hours(symbol, source)
         if interval is None:
-            # This should ideally be populated by main(), but as a robust fallback:
-            default_interval = 8 # Used for both if not found
-            print(f"Warning: Funding interval for {symbol} not found in DB. Using default {default_interval}h for backfill step calculation.")
-            interval = default_interval
+            raise RuntimeError(f"Funding interval for {symbol} on {source} not found. Aborting backfill.")
 
         if exchange == Exchange.HYPERLIQUID:
-            chunk = 450
+            # Hourly funding; fetch ~30 days per chunk (30*24=720 intervals)
+            chunk = 720
         elif exchange == Exchange.BYBIT:
             chunk = 175
         else:  # BINANCE
@@ -155,33 +153,37 @@ def main():
 
     syms_to_process = [s.upper() for s in (args.symbols or config.DEFAULT_SYMBOLS)]
 
+    # Preflight: validate symbols to avoid inserting unknowns for this exchange
+    def _validate_symbol(sym: str) -> bool:
+        if exchange == Exchange.HYPERLIQUID:
+            return hyperliquid_api.fetch_funding_info(sym) is not None
+        elif exchange == Exchange.BYBIT:
+            return bybit_api.fetch_funding_info(sym) is not None
+        else:  # BINANCE
+            return binance_api.fetch_funding_info(sym) is not None
+
+    invalid = [s for s in syms_to_process if not _validate_symbol(s)]
+    if invalid:
+        raise SystemExit(f"Unknown/unsupported symbol(s) for {exchange.value}: {', '.join(invalid)}. Aborting.")
+
     print("Ensuring funding interval information is available...")
     for symbol_info in syms_to_process:
         if database.get_funding_interval_hours(symbol_info, exchange.value) is None:
             source_for_info = exchange.value
-            interval_to_store = None
+            print(f"  Funding interval missing for {symbol_info} on {source_for_info}; fetching...")
+            fetched_interval = None
             if exchange == Exchange.HYPERLIQUID:
-                interval_to_store = 8
-                print(f"  Storing default funding interval for Hyperliquid symbol {symbol_info}: {interval_to_store} hours.")
+                fetched_interval = hyperliquid_api.fetch_funding_info(symbol_info)
             elif exchange == Exchange.BYBIT:
-                print(f"  Fetching funding interval for Bybit symbol {symbol_info}...")
                 fetched_interval = bybit_api.fetch_funding_info(symbol_info)
-                if fetched_interval:
-                    interval_to_store = fetched_interval
-                    print(f"  Stored funding interval for {symbol_info}: {interval_to_store} hours.")
-                else:
-                    print(f"  Could not fetch funding interval for Bybit symbol {symbol_info}. Backfill will use a default if needed.")
             else: # Binance
-                print(f"  Fetching funding interval for Binance symbol {symbol_info}...")
                 fetched_interval = binance_api.fetch_funding_info(symbol_info)
-                if fetched_interval:
-                    interval_to_store = fetched_interval
-                    print(f"  Stored funding interval for {symbol_info}: {interval_to_store} hours.")
-                else:
-                    print(f"  Could not fetch funding interval for Binance symbol {symbol_info}. Backfill will use a default if needed.")
 
-            if interval_to_store:
-                database.store_funding_info(symbol_info, interval_to_store, source_for_info)
+            if fetched_interval:
+                database.store_funding_info(symbol_info, fetched_interval, source_for_info)
+                print(f"  Stored funding interval for {symbol_info}: {fetched_interval} hours.")
+            else:
+                raise RuntimeError(f"Could not determine funding interval for {symbol_info} on {source_for_info}. Aborting.")
             time.sleep(0.2) # Small delay if fetching info for multiple symbols
 
     for s in syms_to_process:

@@ -68,8 +68,24 @@ def fetch_funding_info(symbol: str) -> int | None:
         resp = requests.get(url, params=params, timeout=5)
         resp.raise_for_status()
         data = resp.json()
+        sym_u = symbol.upper()
+        # Binance returns a list; for invalid symbols, it may return many items.
+        # Find the exact symbol match; if not found, return None.
         if isinstance(data, list) and data:
-            return int(data[0].get("fundingIntervalHours", 0))
+            for item in data:
+                try:
+                    if item.get("symbol") == sym_u:
+                        return int(item.get("fundingIntervalHours", 0)) or None
+                except Exception:
+                    continue
+            return None
+        # Some edge cases might return a single dict
+        if isinstance(data, dict) and data.get("symbol") == sym_u:
+            try:
+                val = int(data.get("fundingIntervalHours", 0))
+                return val or None
+            except Exception:
+                return None
     except requests.RequestException:
         pass
     return None

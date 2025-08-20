@@ -54,6 +54,19 @@ def main():
     exchange = Exchange(args.exchange)
     symbols = [s.upper() for s in args.symbols]
 
+    # Preflight: validate symbols for the selected exchange to avoid inserting unknowns
+    def _validate_symbol(sym: str) -> bool:
+        if exchange == Exchange.HYPERLIQUID:
+            return hyperliquid_api.fetch_funding_info(sym) is not None
+        elif exchange == Exchange.BYBIT:
+            return bybit_api.fetch_funding_info(sym) is not None
+        else:  # BINANCE
+            return binance_api.fetch_funding_info(sym) is not None
+
+    invalid = [s for s in symbols if not _validate_symbol(s)]
+    if invalid:
+        raise SystemExit(f"Unknown/unsupported symbol(s) for {exchange.value}: {', '.join(invalid)}. Aborting.")
+
     # Determine refresh behavior - smart refresh is default
     if args.no_refresh:
         refresh_mode = "never"
@@ -75,16 +88,18 @@ def main():
 
             if get_funding_interval_hours(symbol, exchange.value) is None:
                 source = exchange.value
+                hrs = None
                 if exchange == Exchange.HYPERLIQUID:
-                    store_funding_info(symbol, 8, source)
+                    hrs = hyperliquid_api.fetch_funding_info(symbol)
                 elif exchange == Exchange.BYBIT:
                     hrs = bybit_api.fetch_funding_info(symbol)
-                    if hrs:
-                        store_funding_info(symbol, hrs, source)
                 else:  # BINANCE
                     hrs = binance_api.fetch_funding_info(symbol)
-                    if hrs:
-                        store_funding_info(symbol, hrs, source)
+
+                if hrs:
+                    store_funding_info(symbol, hrs, source)
+                else:
+                    raise RuntimeError(f"Could not determine funding interval for {symbol} on {source}. Aborting refresh.")
 
             print(f"Fetching data for {symbol}...")
             last_time_ms = database.get_last_funding_time(symbol, exchange.value)
@@ -111,7 +126,9 @@ def main():
     now_ms = int(time.time() * 1000)
 
     for symbol in symbols:
-        interval = get_funding_interval_hours(symbol, exchange.value) or (8 if exchange != Exchange.BINANCE else None)
+        interval = get_funding_interval_hours(symbol, exchange.value)
+        if interval is None:
+            raise RuntimeError(f"Missing funding interval for {symbol} on {exchange.value} (should have been stored earlier).")
         current_price_str = "N/A" if exchange != Exchange.BINANCE else (
             f"{(val:=binance_api.fetch_current_price(symbol)):.2f}" if (val:=binance_api.fetch_current_price(symbol)) is not None else "N/A"
         )
