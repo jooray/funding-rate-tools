@@ -104,7 +104,8 @@ def backfill_symbol(symbol: str, delay: int, exchange: Exchange):
             if exchange == Exchange.HYPERLIQUID:
                 rates_chunk = hyperliquid_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
             elif exchange == Exchange.BYBIT:
-                rates_chunk = bybit_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
+                # For Bybit, when specifying a time boundary in backfill, use endTime only (API accepts endTime without startTime).
+                rates_chunk = bybit_api.fetch_funding_rate_history(symbol, end_time_ms=current_boundary_for_loop)
             else:  # BINANCE
                 rates_chunk = binance_api.fetch_funding_rate_history(symbol, start_time_ms=fetch_chunk_start_time)
 

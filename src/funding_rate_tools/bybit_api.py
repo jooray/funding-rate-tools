@@ -3,7 +3,7 @@ import time
 
 BYBIT_URL = "https://api.bybit.com"
 
-def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None) -> list[dict]:
+def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None, end_time_ms: int | None = None) -> list[dict]:
     """
     Fetches historical funding rates for a symbol from Bybit.
     Returns list of {'fundingTime': ..., 'fundingRate': ...}.
@@ -13,12 +13,16 @@ def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None) ->
     # For forward-fill (getting newer data), we use startTime
     # For backfill (getting older data), we use endTime
     if start_time_ms:
-        # Forward-fill mode: get data from start_time_ms onwards
+        # Forward-fill mode: get data from start_time_ms onwards.
+        # Bybit requires endTime when startTime is provided; otherwise it may return "Time Is Invalid".
+        now_ms = int(time.time() * 1000)
+        end_time_ms = now_ms if now_ms > start_time_ms else (start_time_ms + 1)
         params = {
             "category": "linear",
             "symbol": symbol.upper(),
             "limit": 200,
-            "startTime": start_time_ms
+            "startTime": start_time_ms,
+            "endTime": end_time_ms,
         }
 
         try:
@@ -47,7 +51,9 @@ def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None) ->
                 })
     else:
         # Backfill mode: get recent data and paginate backwards
-        end_time_ms = None
+        # If end_time_ms is provided, start from there; otherwise start from latest.
+        provided_end_time = end_time_ms is not None
+        end_time_ms = end_time_ms
 
         while True:
             params = {
@@ -79,6 +85,10 @@ def fetch_funding_rate_history(symbol: str, start_time_ms: int | None = None) ->
                     "fundingTime": int(item["fundingRateTimestamp"]),
                     "fundingRate": float(item["fundingRate"])
                 })
+
+            # If caller provided a specific end_time_ms, return only this page to avoid fetching excessive history.
+            if provided_end_time:
+                break
 
             if len(rates_batch) < 200:
                 break
